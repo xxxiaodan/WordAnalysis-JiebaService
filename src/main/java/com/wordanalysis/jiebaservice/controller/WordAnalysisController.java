@@ -6,6 +6,7 @@ import com.huaban.analysis.jieba.SegToken;
 import com.wordanalysis.jiebaservice.util.JiebaProperties;
 import com.wordanalysis.jiebaservice.util.Res;
 
+import com.wordanalysis.jiebaservice.util.Segmentor;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -31,13 +32,14 @@ public class WordAnalysisController {
     private JiebaProperties jiebaProperties;
 
 
-    @ApiOperation("JiebaService")
-    @RequestMapping(value="/JiebaService",method= RequestMethod.POST)
-    public Res wordAnalysis(@ApiParam("待处理数据") @RequestParam MultipartFile text_file,
+    @ApiOperation("JiebaService-file")
+    @RequestMapping(value="/JiebaService-file",method= RequestMethod.POST)
+    public Res wordAnalysis(@ApiParam("待处理数据(文件)") @RequestParam MultipartFile text_file,
+                            @ApiParam("文本长度上限(默认：500Kb)") @RequestParam(defaultValue = "500") Long max_input,
                             @ApiParam("分词模式(0:默认，Index模式；1：Search模式)") @RequestParam(defaultValue = "0") int segment_mode)
-                            //@ApiParam("用户词典") @RequestParam MultipartFile customdict_file)
                             throws IOException {
         if (text_file.isEmpty()) return Res.error("上传文件为空");
+        if (text_file.getSize() > max_input*1024) return Res.error("上传文件超过上限(<=" + max_input + "Kb)");
 
         String text = new String(text_file.getBytes(),"utf-8");
         String sentence = text.replace("\r\n","");
@@ -46,30 +48,26 @@ public class WordAnalysisController {
         //File tempFile = new File(filePath);
        //FileUtils.copyInputStreamToFile(customdict_file.getInputStream(), tempFile);
 
-        JSONObject sent_obj = new JSONObject();
-        sent_obj.put("sentence",sentence);
-        JiebaSegmenter segmenter = new JiebaSegmenter();
+        JSONObject sent_obj = Segmentor.get_Tokens(sentence, segment_mode);
+        //tempFile.delete();
+        return Res.ok().put("result",sent_obj);
+    }
 
-        //if(!text_file.isEmpty()){
-        //    sent_obj.put("customdict_use", "yes");
-        //}else{
-        //    sent_obj.put("customdict_use", "no");
-        //}
+    @ApiOperation("JiebaService-text")
+    @RequestMapping(value="/JiebaService-text",method= RequestMethod.POST)
+    public Res wordAnalysis(@ApiParam("待处理数据(文本)") @RequestParam String sentence,
+                            @ApiParam("文本长度上限(默认：200)") @RequestParam(defaultValue = "200") int max_input,
+                            @ApiParam("分词模式(0:默认，Index模式；1：Search模式)") @RequestParam(defaultValue = "0") int segment_mode)
+            throws IOException {
 
-        List<SegToken> search_tokens;
-        if (segment_mode == 0){
-            search_tokens = segmenter.process(sentence, JiebaSegmenter.SegMode.SEARCH);
-        }else{
-            search_tokens = segmenter.process(sentence, JiebaSegmenter.SegMode.INDEX);
-        }
-        List<JSONObject> item_list = new ArrayList<>();
-        for (SegToken token: search_tokens) {
-            JSONObject items = new JSONObject();
-            items.put("word", token.word);
-            items.put("offset", "[" + token.startOffset + ":" + token.endOffset + "]");
-            item_list.add(items);
-        }
-        sent_obj.put("items",item_list);
+        if (sentence.length() > max_input) return Res.error("输入文本长度超过上限" + "(≤" + max_input + ")");
+        sentence = sentence.replace("\r\n","");
+
+        //String filePath = jiebaProperties.getMyDictionaryPath() + customdict_file.getOriginalFilename();
+        //File tempFile = new File(filePath);
+        //FileUtils.copyInputStreamToFile(customdict_file.getInputStream(), tempFile);
+
+        JSONObject sent_obj = Segmentor.get_Tokens(sentence, segment_mode);
         //tempFile.delete();
         return Res.ok().put("result",sent_obj);
     }
